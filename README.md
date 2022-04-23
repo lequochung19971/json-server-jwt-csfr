@@ -8,6 +8,9 @@ A Fake REST API using json-server with JWT authentication and prevent XSS and CS
 - Refresh Token
 - Prevent XSS and CSFR acttacks
 
+## Diagram
+![authorization-flow](https://user-images.githubusercontent.com/43690592/164885707-b4a75469-3f56-4abd-84c4-d85f8e0759b0.jpg)
+
 ## Install
 
 ```bash
