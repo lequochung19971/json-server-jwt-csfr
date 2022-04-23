@@ -47,7 +47,7 @@ Server will save accessToken and refreshToken follow configs below into cookie w
     expiresIn: '7d',
   };
   ```
-Every time the client call API to access the data resources from server, the browser will automatically attach accessToken and refreshToken into the header and send it to the server.
+Every time the client call API to access the data resources from server, the browser will automatically attach accessToken and refreshToken into the headers and send it to the server.
 
 ## Prevent XSS attack
 - After every time login/register server will create/update accessToken and refreshToken into cookie with **HttpOnly** option.
