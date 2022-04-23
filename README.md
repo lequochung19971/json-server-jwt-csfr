@@ -1,8 +1,12 @@
-# JSONServer + JWT Auth
+# JSONServer + JWT Auth + CSRF
 
-A Fake REST API using json-server with JWT authentication. 
+A Fake REST API using json-server with JWT authentication and prevent XSS and CSFR attacks 
 
-Implemented End-points: login,register
+## Features
+- Login
+- Register
+- Refresh Token
+- Prevent XSS and CSFR acttacks
 
 ## Install
 
@@ -11,14 +15,9 @@ $ npm install
 $ npm run start-auth
 ```
 
-Might need to run
-```
-npm audit fix
-```
+## How login/register works?
 
-## How to login/register?
-
-You can login/register by sending a POST request to
+When you login/register by sending a POST request to
 
 ```
 POST http://localhost:8000/auth/login
@@ -28,31 +27,33 @@ with the following data
 
 ```
 {
-  "email": "nilson@email.com",
-  "password":"nilson"
+  "email": "test@gmail.com",
+  "password":"Test@12"
 }
 ```
 
-You should receive an access token with the following format 
+Server will save accessToken and refreshToken follow configs below into cookie with **HttpOnly**, **SameSite** options
+- Configs:
+  ```
+  const accessTokenConfig = {
+    name: '__aT',
+    secretKey: 'secretKey',
+    expiresIn: '10m',
+  };
 
-```
-{
-   "access_token": "<ACCESS_TOKEN>"
-}
-```
+  const refreshTokenConfig = {
+    name: '__rfT',
+    secretKey: 'secretRefreshKey',
+    expiresIn: '7d',
+  };
+  ```
+Every time the client call API to access the data resources from server, the browser will automatically attach accessToken and refreshToken into the header and send it to the server.
 
+## Prevent XSS attack
+- After every time login/register server will create/update accessToken and refreshToken into cookie with **HttpOnly** option.
 
-You should send this authorization with any request to the protected endpoints
-
-```
-Authorization: Bearer <ACCESS_TOKEN>
-```
-
-Check out these tutorials:
-
-- [Mocking a REST API Back-End for Your Angular App with JSON-Server and Faker.js](https://www.techiediaries.com/angular-mock-backend)
-- [Building a Fake and JWT Protected REST API with json-server](https://www.techiediaries.com/fake-api-jwt-json-server)
-- [Angular 9 Tutorial: Build an Example App with Angular CLI, Angular Router, HttpClient & Angular Material](https://www.shabang.dev/angular-tutorial-build-an-example-app-with-angular-cli-router-httpclient-and-angular-material/)
-
-
-
+## Prevent CSFR attack
+- Using **SameSite** option when setting cookie to prevent CSFR attack. However, not all the browsers support this property.
+- Using another way:
+  - Using a middleware ([csurf](https://github.com/expressjs/csurf)) to prevent this attack.
+  - Require the client call API (/csrfToken) to get **csrfToken** from the server and add to headers['X-CSRF-Token'] for every request.
