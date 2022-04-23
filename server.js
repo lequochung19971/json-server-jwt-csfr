@@ -59,7 +59,11 @@ const findUserById = (id) => {
 };
 
 const currentUser = ({ email, password }) => {
-  return userDb().users.find((user) => user.email === email && user.password === password);
+  const current = userDb().users.find((user) => user.email === email && user.password === password);
+  if (current) {
+    const { password, ...rest } = current;
+    return rest;
+  }
 };
 
 // Check if the user exists in database
@@ -169,9 +173,9 @@ server.post('/auth/register', (req, res) => {
   });
 
   // Create token for new user
-  const { accessToken, refreshToken } = generateAccessAndRefreshToken(res, { email, password });
+  generateAccessAndRefreshToken(res, { email, password });
 
-  res.status(200).json({ accessToken, refreshToken });
+  res.status(200).json({ user: currentUser({ email, password }) });
 });
 
 // Login to one of the users from ./users.json
@@ -194,15 +198,13 @@ server.post('/auth/login', (req, res) => {
   const current = currentUser({ email, password });
   createUserIdCookie(res, current.id);
 
-  const { accessToken, refreshToken } = generateAccessAndRefreshToken(res, { email, password });
-  res.status(200).json({ refreshToken, accessToken });
+  generateAccessAndRefreshToken(res, { email, password });
+  res.status(200).json({ user: current });
 });
 
 server.post('/auth/refreshToken', async (req, res) => {
   const refreshToken = req.cookies[refreshTokenConfig.name];
   const refreshTokenData = refreshTokensDb().refreshTokens[refreshToken ?? ''];
-
-  console.log('🚀 ~ file: server.js ~ line 220 ~ server.post ~ refreshToken', refreshToken);
 
   if (!refreshTokenData) {
     const status = 403;
@@ -213,14 +215,10 @@ server.post('/auth/refreshToken', async (req, res) => {
   try {
     await verifyToken(refreshToken, refreshTokenConfig.secretKey);
 
-    const newAccessToken = createAccessToken(res, { email: refreshTokenData.email });
-    const newRefreshToken = createRefreshToken(
-      res,
-      { email: refreshTokenData.email },
-      refreshToken
-    );
+    createAccessToken(res, { email: refreshTokenData.email });
+    createRefreshToken(res, { email: refreshTokenData.email }, refreshToken);
 
-    res.status(200).json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
+    res.status(200).json({ isRefreshed: true });
   } catch (error) {
     const status = 401;
     const message = 'Invalid refresh token';
@@ -228,7 +226,7 @@ server.post('/auth/refreshToken', async (req, res) => {
   }
 });
 
-server.get('/csrf-token', (req, res) => {
+server.get('/csrfToken', (req, res) => {
   res.json({ csrfToken: req.csrfToken() });
 });
 
@@ -240,8 +238,6 @@ server.use(/^(?!\/auth).*$/, async (req, res, next) => {
 
   try {
     await verifyToken(accessToken.split(' ')[1], accessTokenConfig.secretKey);
-    // console.log(decode);
-    // createAccessToken(res, { email: decode.email });
     next();
   } catch (error) {
     const status = 401;
@@ -270,8 +266,8 @@ server.post('/test-csrf', (req, res) => {
 
 // Handle CSRF attack error.
 server.use((err, req, res, next) => {
-  console.log(err)
   if (err.code !== 'EBADCSRFTOKEN') return next(err);
+
   res.status(403);
   res.send('CSRF attack detected!');
 });
