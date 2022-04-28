@@ -10,7 +10,7 @@ const cors = require('cors');
 
 const server = jsonServer.create();
 const database = jsonServer.router('./database.json');
-const userDb = () => JSON.parse(fs.readFileSync('./users.json', 'UTF-8'));
+const db = () => JSON.parse(fs.readFileSync('./database.json', 'UTF-8'));
 const refreshTokensDb = () => JSON.parse(fs.readFileSync('./refreshTokens.json', 'UTF-8'));
 
 const { accessTokenConfig, refreshTokenConfig } = require('./config');
@@ -35,13 +35,14 @@ const saveRefreshToken = (oldToken = '', newToken = '', payload) => {
       res.status(status).json({ status, message });
       return;
     }
-    data = JSON.parse((data ?? {}).toString());
-    const tokenData = data.refreshTokens[oldToken];
+    data = JSON.parse((data ?? { refreshTokens: {} }).toString());
+    const tokenData = data[oldToken];
     if (tokenData) {
-      delete data.refreshTokens[oldToken];
+      delete data[oldToken];
     }
-    data.refreshTokens[newToken] = payload;
+    data[newToken] = payload;
 
+    console.log('writeFile for refreshTokens', data);
     fs.writeFile('./refreshTokens.json', JSON.stringify(data), (err, result) => {
       // WRITE
       if (err) {
@@ -55,11 +56,15 @@ const saveRefreshToken = (oldToken = '', newToken = '', payload) => {
 };
 
 const findUserById = (id) => {
-  return userDb().users.find((user) => user.id.toString() === id.toString());
+  const current = db().users.find((user) => user.id.toString() === id.toString());
+  if (current) {
+    const { password, ...rest } = current;
+    return rest;
+  }
 };
 
 const currentUser = ({ email, password }) => {
-  const current = userDb().users.find((user) => user.email === email && user.password === password);
+  const current = db().users.find((user) => user.email === email && user.password === password);
   if (current) {
     const { password, ...rest } = current;
     return rest;
@@ -141,7 +146,7 @@ server.post('/auth/register', (req, res) => {
     return;
   }
 
-  fs.readFile('./users.json', (err, data) => {
+  fs.readFile('./database.json', (err, data) => {
     if (err) {
       const status = 401;
       const message = err;
@@ -161,7 +166,7 @@ server.post('/auth/register', (req, res) => {
     // Save user id to cookie
     createUserIdCookie(res, lastItemId + 1);
 
-    fs.writeFile('./users.json', JSON.stringify(data), (err, result) => {
+    fs.writeFile('./database.json', JSON.stringify(data), (err, result) => {
       // WRITE
       if (err) {
         const status = 401;
@@ -199,7 +204,7 @@ server.post('/auth/login', (req, res) => {
   createUserIdCookie(res, current.id);
 
   generateAccessAndRefreshToken(res, { email, password });
-  res.status(200).json({ user: current });
+  res.status(200).json(current);
 });
 
 server.post('/auth/refreshToken', async (req, res) => {
@@ -207,9 +212,10 @@ server.post('/auth/refreshToken', async (req, res) => {
   const refreshTokenData = refreshTokensDb().refreshTokens[refreshToken ?? ''];
 
   if (!refreshTokenData) {
-    const status = 403;
+    const status = 401;
     const message = 'Invalid refresh token';
-    res.status(status).json({ status, message, error });
+    res.status(status).json({ status, message });
+    return;
   }
 
   try {
@@ -246,8 +252,8 @@ server.use(/^(?!\/auth).*$/, async (req, res, next) => {
   }
 });
 
-server.get('/auth/me', (req, res) => {
-  const { userId } = req.cookies;
+server.get('/me', (req, res) => {
+  const { userId = '' } = req.cookies;
   const user = findUserById(userId);
 
   if (!user) {
@@ -257,6 +263,13 @@ server.get('/auth/me', (req, res) => {
     return;
   }
 
+  res.status(200).json(user);
+});
+
+server.post('/auth/logout', (req, res) => {
+  res.clearCookie(accessTokenConfig.name);
+  res.clearCookie(refreshTokenConfig.name);
+  res.clearCookie('userId');
   res.status(200).json(true);
 });
 
